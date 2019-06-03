@@ -543,6 +543,12 @@ object CSRs {
   val mhpmcounter29h = 0xb9d
   val mhpmcounter30h = 0xb9e
   val mhpmcounter31h = 0xb9f
+  val faultaddr      = 0xbc0
+  val faultmask      = 0xbc1
+  val faultaddrrot   = 0xbc2
+  val faultmaskrot   = 0xbc3
+  val faultconf      = 0xbc4
+
   val all = {
     val res = collection.mutable.ArrayBuffer[Int]()
     res += fflags
@@ -693,6 +699,11 @@ object CSRs {
     res += marchid
     res += mimpid
     res += mhartid
+    res += faultaddr
+    res += faultmask
+    res += faultaddrrot
+    res += faultmaskrot
+    res += faultconf
     res.toArray
   }
   val all32 = {
@@ -760,6 +771,11 @@ object CSRs {
     res += mhpmcounter29h
     res += mhpmcounter30h
     res += mhpmcounter31h
+//    res += faultaddr
+//    res += faultmask
+//    res += faultaddrrot
+//    res += faultmaskrot
+//    res += faultconf
     res.toArray
   }
 }

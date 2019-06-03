@@ -64,6 +64,12 @@ class DCSR extends Bundle {
   val prv = UInt(width = PRV.SZ)
 }
 
+class FaultConfig extends Bundle {
+  val en = Bool()
+  val en_rot = Bool()
+  val mode = UInt(width=2)
+}
+
 class MIP(implicit p: Parameters) extends CoreBundle()(p)
     with HasCoreParameters {
   val lip = Vec(coreParams.nLocalInterrupts, Bool())
@@ -219,6 +225,13 @@ class CSRFileIO(implicit p: Parameters) extends CoreBundle
   val csrw_counter = UInt(OUTPUT, CSR.nCtr)
   val inst = Vec(retireWidth, UInt(width = iLen)).asInput
   val trace = Vec(retireWidth, new TracedInstruction).asOutput
+
+  val faultaddr = UInt(OUTPUT, xLen)
+  val faultmask = UInt(OUTPUT, xLen)
+  val faultaddrrot = UInt(OUTPUT, xLen)
+  val faultmaskrot = UInt(OUTPUT, xLen)
+  val faultconf = new FaultConfig().asOutput
+
 }
 
 class CSRFile(
@@ -316,6 +329,12 @@ class CSRFile(
   val reg_fflags = Reg(UInt(width = 5))
   val reg_frm = Reg(UInt(width = 3))
 
+  val reg_faultmask = Reg(UInt(width=xLen), init=UInt(0))
+  val reg_faultaddr = Reg(UInt(width=xLen), init=UInt(0))
+  val reg_faultaddrrot = Reg(UInt(width=xLen), init=UInt(0))
+  val reg_faultmaskrot = Reg(UInt(width=xLen), init=UInt(0))
+  val reg_faultconf = Reg(init=new FaultConfig().fromBits(0))
+
   val reg_instret = WideCounter(64, io.retire)
   val reg_cycle = if (enableCommitLog) reg_instret else withClock(io.ungated_clock) { WideCounter(64, !reg_wfi) }
   val reg_hpmevent = io.counters.map(c => Reg(init = UInt(0, xLen)))
@@ -389,6 +408,21 @@ class CSRFile(
 
   if (usingFPU)
     read_mapping ++= fp_csrs
+
+  if (usingFault) {
+    read_mapping += CSRs.faultaddr -> reg_faultaddr
+    read_mapping += CSRs.faultmask -> reg_faultmask
+    read_mapping += CSRs.faultaddrrot -> reg_faultaddrrot
+    read_mapping += CSRs.faultmaskrot -> reg_faultmaskrot
+    read_mapping += CSRs.faultconf -> Cat(reg_faultconf.mode, Cat(reg_faultconf.en_rot, reg_faultconf.en))
+
+
+    io.faultmask := reg_faultmask
+    io.faultaddr := reg_faultaddr
+    io.faultaddrrot := reg_faultaddrrot
+    io.faultmaskrot := reg_faultmaskrot
+    io.faultconf := reg_faultconf
+  }
 
   if (coreParams.haveBasicCounters) {
     read_mapping += CSRs.mcycle -> reg_cycle
@@ -713,6 +747,19 @@ class CSRFile(
     when (decoded_addr(CSRs.mie))      { reg_mie := wdata & supported_interrupts }
     when (decoded_addr(CSRs.mepc))     { reg_mepc := formEPC(wdata) }
     when (decoded_addr(CSRs.mscratch)) { reg_mscratch := wdata }
+
+    if (usingFault) {
+      when(decoded_addr(CSRs.faultaddr)) { reg_faultaddr := wdata }
+      when(decoded_addr(CSRs.faultmask)) { reg_faultmask := wdata }
+      when(decoded_addr(CSRs.faultaddrrot)) { reg_faultaddrrot := wdata }
+      when(decoded_addr(CSRs.faultmaskrot)) { reg_faultmaskrot := wdata }
+      when(decoded_addr(CSRs.faultconf)) {
+        reg_faultconf.en := wdata(0)
+        reg_faultconf.en_rot := wdata(1)
+        reg_faultconf.mode := wdata(3,2)
+      }
+    }
+
     if (mtvecWritable)
       when (decoded_addr(CSRs.mtvec))  { reg_mtvec := ~(~wdata | 2.U | Mux(wdata(0), UInt(((BigInt(1) << mtvecInterruptAlign) - 1) << mtvecBaseAlign), 0.U)) }
     when (decoded_addr(CSRs.mcause))   { reg_mcause := wdata & UInt((BigInt(1) << (xLen-1)) + (BigInt(1) << whichInterrupt.getWidth) - 1) }

@@ -22,6 +22,7 @@ trait CoreParams {
   val useSCIE: Boolean
   val mulDiv: Option[MulDivParams]
   val fpu: Option[FPUParams]
+  val useFault: Boolean
   val fetchWidth: Int
   val decodeWidth: Int
   val retireWidth: Int
@@ -52,6 +53,7 @@ trait HasCoreParameters extends HasTileParameters {
 
   val usingMulDiv = coreParams.mulDiv.nonEmpty
   val usingFPU = coreParams.fpu.nonEmpty
+  val usingFault = coreParams.useFault
   val usingAtomics = coreParams.useAtomics
   val usingAtomicsOnlyForIO = coreParams.useAtomicsOnlyForIO
   val usingAtomicsInCache = usingAtomics && !usingAtomicsOnlyForIO
