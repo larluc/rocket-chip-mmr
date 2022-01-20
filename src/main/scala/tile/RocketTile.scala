@@ -23,7 +23,8 @@ case class RocketTileParams(
     name: Option[String] = Some("tile"),
     hartId: Int = 0,
     blockerCtrlAddr: Option[BigInt] = None,
-    boundaryBuffers: Boolean = false // if synthesized with hierarchical PnR, cut feed-throughs?
+    boundaryBuffers: Boolean = false, // if synthesized with hierarchical PnR, cut feed-throughs?
+    use4CoreRedundancy: Boolean = false
     ) extends TileParams {
   require(icache.isDefined)
   require(dcache.isDefined)
