@@ -4,3 +4,7 @@ project/target
 *~
 .addons-dont-touch
 /lib/
+
+# vs code
+/.vscode
+/.metals
