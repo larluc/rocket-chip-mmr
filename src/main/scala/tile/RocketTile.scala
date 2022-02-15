@@ -10,6 +10,7 @@ import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.interrupts._
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.rocket._
+import freechips.rocketchip.redundantrocket._
 import freechips.rocketchip.util._
 
 case class RocketTileParams(
@@ -24,7 +25,7 @@ case class RocketTileParams(
     hartId: Int = 0,
     blockerCtrlAddr: Option[BigInt] = None,
     boundaryBuffers: Boolean = false, // if synthesized with hierarchical PnR, cut feed-throughs?
-    use4CoreRedundancy: Boolean = false
+    redundantCoresToAdd: Int = 0
     ) extends TileParams {
   require(icache.isDefined)
   require(dcache.isDefined)
@@ -113,7 +114,12 @@ class RocketTileModuleImp(outer: RocketTile) extends BaseTileModuleImp(outer)
     with HasICacheFrontendModule {
   Annotated.params(this, outer.rocketParams)
 
-  val core = Module(new Rocket()(outer.p))
+  val core = if (outer.rocketParams.redundantCoresToAdd > 0) {
+    Module(new RedundantRocket(outer.rocketParams.redundantCoresToAdd + 1)(outer.p))
+  }
+  else {
+    Module(new Rocket()(outer.p))
+  }
 
   val uncorrectable = RegInit(Bool(false))
   val halt_and_catch_fire = outer.rocketParams.hcfOnUncorrectable.option(IO(Bool(OUTPUT)))

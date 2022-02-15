@@ -110,7 +110,7 @@ class With1Tiny4MRCore extends Config((site, here, up) => {
         useVM = false,
         fpu = None,
         mulDiv = Some(MulDivParams(mulUnroll = 8))),
-      use4CoreRedundancy = true,
+      redundantCoresToAdd = 3,
       btb = None,
       dcache = Some(DCacheParams(
         rowBits = site(SystemBusKey).beatBits,
