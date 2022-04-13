@@ -103,14 +103,14 @@ class With1TinyCore extends Config((site, here, up) => {
   ))
 })
 
-class With1Tiny4MRCore extends Config((site, here, up) => {
+class With1TinyNMRCore(n: Int) extends Config((site, here, up) => {
   case XLen => 32
   case RocketTilesKey => List(RocketTileParams(
       core = RocketCoreParams(
         useVM = false,
         fpu = None,
         mulDiv = Some(MulDivParams(mulUnroll = 8))),
-      redundantCoresToAdd = 3,
+      redundantCoresToAdd = n - 1,
       btb = None,
       dcache = Some(DCacheParams(
         rowBits = site(SystemBusKey).beatBits,

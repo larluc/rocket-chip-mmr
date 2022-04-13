@@ -67,7 +67,7 @@ class Tiny4RedundantCoreConfig extends Config(
   new WithNoMemPort ++
   new WithNMemoryChannels(0) ++
   new WithNBanks(0) ++
-  new With1Tiny4MRCore ++
+  new With1TinyNMRCore(4) ++
   new BaseConfig)
 
 class MemPortOnlyConfig extends Config(
