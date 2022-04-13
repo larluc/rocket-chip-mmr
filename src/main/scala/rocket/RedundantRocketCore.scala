@@ -9,6 +9,7 @@ import Chisel._
 import freechips.rocketchip.config._
 import freechips.rocketchip.rocket._
 import freechips.rocketchip.tile._
+import freechips.rocketchip.util._
 
 import chisel3.core.ActualDirection
 import chisel3.experimental.DataMirror
@@ -70,26 +71,30 @@ class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreMo
 
   require(io.getWidth == coreInRec().getWidth + coreOutRec().getWidth)
 
+  // Instantiate MultiVoter, use all cores
+  val multiVoter = Module(new MultiVoter(coreOutRec().getWidth, numberOfCores))
+  multiVoter.io.sel := (numberOfCores - 1).U
+
   val coreInWire = Wire(coreInRec())
   connectRecordElementsByName(io.elements, coreInWire.elements)
-
-  val coreOutUIntWires = Wire(Vec(numberOfCores, UInt(coreOutRec().getWidth.W)))
 
   val cores =
     for (i <- 0 until numberOfCores) yield {
       val core = Module(new Rocket()(p))
 
+      // Connect RedundantRocket input to cores
       connectRecordElementsByName(coreInWire.elements, core.io.elements)
 
+      // Connect core outputs to voter
       val coreOutWire = Wire(coreOutRec())
       connectRecordElementsByName(core.io.elements, coreOutWire.elements)
-      coreOutUIntWires(i) := coreOutWire.asUInt
+      multiVoter.io.in(i) := coreOutWire.asUInt
 
       core
     }
 
+  // Use voter output as RedundantRocket output
   val coreOutWire = Wire(coreOutRec())
-  coreOutWire := coreOutUIntWires(0).asTypeOf(coreOutRec())
-  
+  coreOutWire := multiVoter.io.out.asTypeOf(coreOutRec())
   connectRecordElementsByName(coreOutWire.elements, io.elements)
 }

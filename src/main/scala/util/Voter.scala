@@ -8,6 +8,8 @@ import chisel3.util._
 class WordVoter(width: Int, inputs: Int, majorityCount: Int) extends Module {
   require(width > 0)
   require(inputs >= 2)
+  require(inputs == 2 || majorityCount >= inputs / 2 + inputs % 1)
+  require(inputs == 2 || majorityCount < inputs)
   if (inputs > 2) {
     require(majorityCount >= inputs / 2 + inputs % 1)
     require(majorityCount < inputs)
