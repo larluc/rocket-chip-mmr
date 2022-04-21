@@ -17,7 +17,7 @@ import chisel3.experimental.DataMirror
 import scala.collection.immutable.ListMap
 
 
-class DirectedRecord(record: Record, direction: ActualDirection) extends Record {
+class DirectedRecord(record: Record, direction: ActualDirection, exclude: Set[Seq[String]] = Set()) extends Record {
   val elements = 
     for ((name, data) <- record.elements
       // Only iterate over Data if it is Record or if direction matches
@@ -25,22 +25,32 @@ class DirectedRecord(record: Record, direction: ActualDirection) extends Record 
         && {
           // Avoid zero width Aggregates/Data
           if (data.isInstanceOf[Record]) {
-            (new DirectedRecord(data.asInstanceOf[Record], direction)).getWidth > 0
+            // Generate exclude list for sub aggregates
+            val subExclude = exclude.filter(_.head == name).map(_.drop(1))
+            
+            (new DirectedRecord(data.asInstanceOf[Record], direction, subExclude)).getWidth > 0
           }
           else {
             data.getWidth > 0
           }
-        }))
+        }
+        &&
+          // Do not iterate over excluded aggregates
+          !exclude.contains(Seq(name))
+        ))
       yield {
         if (data.isInstanceOf[Record]) {
-          (name -> new DirectedRecord(data.asInstanceOf[Record], direction))
+          // Generate exclude list for sub aggregates
+          val subExclude = exclude.filter(_.head == name).map(_.drop(1))
+
+          (name -> new DirectedRecord(data.asInstanceOf[Record], direction, subExclude))
         }
         else {
           (name -> data.asInstanceOf[Data].cloneType)
         }
       }
 
-  override def cloneType: this.type = (new DirectedRecord(record, direction)).asInstanceOf[this.type]
+  override def cloneType: this.type = (new DirectedRecord(record, direction, exclude)).asInstanceOf[this.type]
 }
 
 trait RecordHelperFunctions {
@@ -57,6 +67,19 @@ trait RecordHelperFunctions {
       }
     }
   }
+
+  def connectRecordElement(src: ListMap[String, Any], dest: ListMap[String, Any], path: Seq[String]) : Unit = {
+    if (path.size > 1) {
+      connectRecordElement(
+        src(path.head).asInstanceOf[Record].elements,
+        dest(path.head).asInstanceOf[Record].elements,
+        path.drop(1)
+      )
+    }
+    else {
+      dest(path.head).asInstanceOf[Data] := src(path.head).asInstanceOf[Data]
+    }
+  }
 }
 
 class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreModule()(p)
@@ -66,10 +89,21 @@ class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreMo
   
   require(numberOfCores > 1)
 
-  def coreInRec() : Record = new DirectedRecord(io, ActualDirection.Input)
-  def coreOutRec() : Record = new DirectedRecord(io, ActualDirection.Output)
+  val exclude = Set(
+      "dmem.s2_kill",
+      "dmem.s1_data.mask",
+      "dmem.req.bits.phys",
+      "dmem.req.bits.typ",
+      "dmem.req.bits.cmd",
+      "dmem.req.valid",
+      "ptw.ptbr.mode",
+      "ptw.status.dprv"
+    ).map(_.split("\\.").toSeq)
 
-  require(io.getWidth == coreInRec().getWidth + coreOutRec().getWidth)
+  def coreInRec() : Record = new DirectedRecord(io, ActualDirection.Input, exclude)
+  def coreOutRec() : Record = new DirectedRecord(io, ActualDirection.Output, exclude)
+
+  //require(io.getWidth == coreInRec().getWidth + coreOutRec().getWidth)
 
   // Instantiate MultiVoter, use all cores
   val multiVoter = Module(new MultiVoter(coreOutRec().getWidth, numberOfCores))
@@ -78,6 +112,12 @@ class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreMo
   val coreInWire = Wire(coreInRec())
   connectRecordElementsByName(io.elements, coreInWire.elements)
 
+  // Instantiate fault-free core
+  val faultFreeCore = Module(new Rocket()(p))
+
+  connectRecordElementsByName(coreInWire.elements, faultFreeCore.io.elements)
+
+  // Instantiate redundant cores
   val cores =
     for (i <- 0 until numberOfCores) yield {
       val core = Module(new Rocket()(p))
@@ -97,4 +137,9 @@ class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreMo
   val coreOutWire = Wire(coreOutRec())
   coreOutWire := multiVoter.io.out.asTypeOf(coreOutRec())
   connectRecordElementsByName(coreOutWire.elements, io.elements)
+
+  // Take output signals that would lead to comb loop from fault-free core
+  for (path <- exclude) {
+    connectRecordElement(faultFreeCore.io.elements, io.elements, path)
+  }
 }
