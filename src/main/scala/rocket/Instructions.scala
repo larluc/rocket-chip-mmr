@@ -548,6 +548,7 @@ object CSRs {
   val faultaddrrot   = 0xbc2
   val faultmaskrot   = 0xbc3
   val faultconf      = 0xbc4
+  val coreredunconf  = 0xbd0
 
   val all = {
     val res = collection.mutable.ArrayBuffer[Int]()
@@ -704,6 +705,7 @@ object CSRs {
     res += faultaddrrot
     res += faultmaskrot
     res += faultconf
+    res += coreredunconf
     res.toArray
   }
   val all32 = {

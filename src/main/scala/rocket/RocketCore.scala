@@ -40,7 +40,8 @@ case class RocketCoreParams(
   mvendorid: Int = 0, // 0 means non-commercial implementation
   mulDiv: Option[MulDivParams] = Some(MulDivParams()),
   fpu: Option[FPUParams] = Some(FPUParams()),
-  useFault: Boolean = true
+  useFault: Boolean = true,
+  nRedundantCores: Int = 1
 ) extends CoreParams {
   val haveFSDirty = false
   val pmpGranularity: Int = 4
@@ -245,6 +246,7 @@ class Rocket(implicit p: Parameters) extends CoreModule()(p)
   val id_npc = (ibuf.io.pc.asSInt + ImmGen(IMM_UJ, id_inst(0))).asUInt
 
   val csr = Module(new CSRFile(perfEvents, coreParams.customCSRs.decls))
+  io.coreredunconf := csr.io.coreredunconf
   val id_csr_en = id_ctrl.csr.isOneOf(CSR.S, CSR.C, CSR.W)
   val id_system_insn = id_ctrl.csr === CSR.I
   val id_csr_ren = id_ctrl.csr.isOneOf(CSR.S, CSR.C) && id_raddr1 === UInt(0)

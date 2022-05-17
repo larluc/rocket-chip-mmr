@@ -109,7 +109,8 @@ class With1TinyNMRCore(n: Int) extends Config((site, here, up) => {
       core = RocketCoreParams(
         useVM = false,
         fpu = None,
-        mulDiv = Some(MulDivParams(mulUnroll = 8))),
+        mulDiv = Some(MulDivParams(mulUnroll = 8)),
+        nRedundantCores = n),
       redundantCoresToAdd = n - 1,
       btb = None,
       dcache = Some(DCacheParams(

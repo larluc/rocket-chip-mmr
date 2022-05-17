@@ -23,6 +23,7 @@ trait CoreParams {
   val mulDiv: Option[MulDivParams]
   val fpu: Option[FPUParams]
   val useFault: Boolean
+  val nRedundantCores: Int
   val fetchWidth: Int
   val decodeWidth: Int
   val retireWidth: Int
@@ -85,6 +86,7 @@ trait HasCoreParameters extends HasTileParameters {
   // Requires post-processing due to out-of-order writebacks.
   val enableCommitLog = false
 
+  val nRedundantCores = coreParams.nRedundantCores
 }
 
 abstract class CoreModule(implicit val p: Parameters) extends Module
@@ -107,5 +109,6 @@ trait HasCoreIO extends HasTileParameters {
     val fpu = new FPUCoreIO().flip
     val rocc = new RoCCCoreIO().flip
     val trace = Vec(coreParams.retireWidth, new TracedInstruction).asOutput
+    val coreredunconf = new CoreRedundancyConfig(nRedundantCores).asOutput
   }
 }

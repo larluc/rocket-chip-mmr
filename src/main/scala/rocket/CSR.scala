@@ -70,6 +70,11 @@ class FaultConfig extends Bundle {
   val mode = UInt(width=2)
 }
 
+class CoreRedundancyConfig(nRedundantCores: Int) extends Bundle {
+  val num = UInt(width=math.max(1, log2Ceil(nRedundantCores)))
+  override def cloneType: this.type = (new CoreRedundancyConfig(nRedundantCores)).asInstanceOf[this.type]
+}
+
 class MIP(implicit p: Parameters) extends CoreBundle()(p)
     with HasCoreParameters {
   val lip = Vec(coreParams.nLocalInterrupts, Bool())
@@ -232,6 +237,7 @@ class CSRFileIO(implicit p: Parameters) extends CoreBundle
   val faultmaskrot = UInt(OUTPUT, xLen)
   val faultconf = new FaultConfig().asOutput
 
+  val coreredunconf = new CoreRedundancyConfig(nRedundantCores).asOutput
 }
 
 class CSRFile(
@@ -335,6 +341,8 @@ class CSRFile(
   val reg_faultmaskrot = Reg(UInt(width=xLen), init=UInt(0))
   val reg_faultconf = Reg(init=new FaultConfig().fromBits(0))
 
+  val reg_coreredunconf = RegInit(init=new CoreRedundancyConfig(nRedundantCores).fromBits(0))
+
   val reg_instret = WideCounter(64, io.retire)
   val reg_cycle = if (enableCommitLog) reg_instret else withClock(io.ungated_clock) { WideCounter(64, !reg_wfi) }
   val reg_hpmevent = io.counters.map(c => Reg(init = UInt(0, xLen)))
@@ -422,6 +430,12 @@ class CSRFile(
     io.faultaddrrot := reg_faultaddrrot
     io.faultmaskrot := reg_faultmaskrot
     io.faultconf := reg_faultconf
+  }
+
+  if (nRedundantCores > 1) {
+    read_mapping += CSRs.coreredunconf -> reg_coreredunconf.num
+
+    io.coreredunconf := reg_coreredunconf
   }
 
   if (coreParams.haveBasicCounters) {
@@ -757,6 +771,12 @@ class CSRFile(
         reg_faultconf.en := wdata(0)
         reg_faultconf.en_rot := wdata(1)
         reg_faultconf.mode := wdata(3,2)
+      }
+    }
+
+    if (nRedundantCores > 1) {
+      when(decoded_addr(CSRs.coreredunconf)) {
+        reg_coreredunconf.num := wdata(log2Ceil(nRedundantCores)-1, 0)
       }
     }
 
