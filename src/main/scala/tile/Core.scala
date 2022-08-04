@@ -99,6 +99,11 @@ class CoreInterrupts(implicit p: Parameters) extends TileInterrupts()(p) {
   val buserror = coreParams.tileControlAddr.map(a => Bool())
 }
 
+class FaultConfig(val xLen: Int) extends Bundle {
+  val inject = Bool()
+  val faultmask = UInt(xLen.W)
+}
+
 trait HasCoreIO extends HasTileParameters {
   implicit val p: Parameters
   val io = new CoreBundle()(p) with HasExternallyDrivenTileConstants {
@@ -110,5 +115,6 @@ trait HasCoreIO extends HasTileParameters {
     val rocc = new RoCCCoreIO().flip
     val trace = Vec(coreParams.retireWidth, new TracedInstruction).asOutput
     val coreredunconf = new CoreRedundancyConfig(nRedundantCores).asOutput
+    val faultconf = new FaultConfig(32).asInput
   }
 }

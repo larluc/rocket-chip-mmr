@@ -603,26 +603,7 @@ class Rocket(implicit p: Parameters) extends CoreModule()(p)
   val rf_wen = wb_wen || ll_wen
   val rf_waddr = Mux(ll_wen, ll_waddr, wb_waddr)
 
-  val rand_l = Reg(init=UInt(1, xLen))
-  rand_l := Cat(rand_l(0)^rand_l(2)^rand_l(3)^rand_l(5), rand_l(xLen-1,1))
-
-  val fault_cond = (csr.io.faultaddr === mem_wb_addr.asUInt) && csr.io.faultconf.en
-  val fault_cond2 = (csr.io.faultaddrrot === mem_wb_addr.asUInt)  && csr.io.faultconf.en_rot
-  val randval = rand_l & csr.io.faultmaskrot
-
-  val stuck0 = io.dmem.resp.bits.data(xLen-1, 0) & ~csr.io.faultmask
-  val stuck1 = io.dmem.resp.bits.data(xLen-1, 0) | csr.io.faultmask
-
-  val faultval = MuxLookup(csr.io.faultconf.mode, stuck0,
-                           Array(
-                            0.U -> stuck0,
-                            1.U -> stuck1,
-                            ))
-
-  val fault_data = Mux(fault_cond, faultval,
-                   Mux(fault_cond2, randval, io.dmem.resp.bits.data(xLen-1, 0)))
-
-  val rf_wdata = Mux(dmem_resp_valid && dmem_resp_xpu, fault_data,
+  val rf_wdata = Mux(dmem_resp_valid && dmem_resp_xpu, io.dmem.resp.bits.data(xLen-1, 0),
                  Mux(ll_wen, ll_wdata,
                  Mux(wb_ctrl.csr =/= CSR.N, csr.io.rw.rdata,
                  Mux(wb_ctrl.mul, mul.map(_.io.resp.bits.data).getOrElse(wb_reg_wdata),
@@ -785,7 +766,10 @@ class Rocket(implicit p: Parameters) extends CoreModule()(p)
   io.dmem.req.bits.phys := Bool(false)
 
   val mem_addr = encodeVirtualAddress(ex_rs(0), alu.io.adder_out)
-  io.dmem.req.bits.addr := mem_addr
+  
+  // Fault injection
+  val bitflip = mem_addr ^ io.faultconf.faultmask
+  io.dmem.req.bits.addr := Mux(io.faultconf.inject, bitflip, mem_addr)
 
 
   io.dmem.s1_data.data := (if (fLen == 0) mem_reg_rs2 else Mux(mem_ctrl.fp, Fill((xLen max fLen) / fLen, io.fpu.store_data), mem_reg_rs2))

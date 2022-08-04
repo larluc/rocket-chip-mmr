@@ -93,7 +93,7 @@ class WordVoter(width: Int, inputs: Int, majorityCount: Int) extends Module {
   )
 }
 
-class MultiVoter(width: Int, inputs: Int) extends Module {
+class ConfigurableVoter(width: Int, inputs: Int) extends Module {
   require(width > 0)
   require(inputs >= 2)
 
