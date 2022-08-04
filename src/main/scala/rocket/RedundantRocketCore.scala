@@ -13,6 +13,7 @@ import freechips.rocketchip.util._
 
 import chisel3.core.ActualDirection
 import chisel3.experimental.DataMirror
+import chisel3.core.dontTouch
 
 import scala.collection.immutable.ListMap
 
@@ -100,22 +101,15 @@ class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreMo
       "ptw.status.dprv"
     ).map(_.split("\\.").toSeq)
 
-  def coreInRec() : Record = new DirectedRecord(io, ActualDirection.Input, exclude)
-  def coreOutRec() : Record = new DirectedRecord(io, ActualDirection.Output, exclude)
-
-  //require(io.getWidth == coreInRec().getWidth + coreOutRec().getWidth)
-
-  // Instantiate MultiVoter, use all cores
-  val multiVoter = Module(new MultiVoter(coreOutRec().getWidth, numberOfCores))
-  multiVoter.io.sel := (numberOfCores - 1).U
+  def coreInRec() : Record = new DirectedRecord(io, ActualDirection.Input)
+  def coreOutRec() : Record = new DirectedRecord(io, ActualDirection.Output)
 
   val coreInWire = Wire(coreInRec())
   connectRecordElementsByName(io.elements, coreInWire.elements)
 
-  // Instantiate fault-free core
-  val faultFreeCore = Module(new Rocket()(p))
-
-  connectRecordElementsByName(coreInWire.elements, faultFreeCore.io.elements)
+  // Instantiate ConfigurableVoter
+  val configurableVoter = Module(new ConfigurableVoter(coreOutRec().getWidth, numberOfCores))
+  configurableVoter.io.sel := RegNext(io.coreredunconf.num)
 
   // Instantiate redundant cores
   val cores =
@@ -126,20 +120,20 @@ class RedundantRocket(numberOfCores: Int)(implicit p: Parameters) extends CoreMo
       connectRecordElementsByName(coreInWire.elements, core.io.elements)
 
       // Connect core outputs to voter
-      val coreOutWire = Wire(coreOutRec())
+      val coreOutWire = dontTouch(Wire(coreOutRec()))
       connectRecordElementsByName(core.io.elements, coreOutWire.elements)
-      multiVoter.io.in(i) := coreOutWire.asUInt
+      configurableVoter.io.in(i) := coreOutWire.asUInt
 
       core
     }
 
   // Use voter output as RedundantRocket output
   val coreOutWire = Wire(coreOutRec())
-  coreOutWire := multiVoter.io.out.asTypeOf(coreOutRec())
+  coreOutWire := configurableVoter.io.out.asTypeOf(coreOutRec())
   connectRecordElementsByName(coreOutWire.elements, io.elements)
 
-  // Take output signals that would lead to comb loop from fault-free core
+  // Take output signals that would lead to comb loop from first core
   for (path <- exclude) {
-    connectRecordElement(faultFreeCore.io.elements, io.elements, path)
+    connectRecordElement(cores(0).io.elements, io.elements, path)
   }
 }
